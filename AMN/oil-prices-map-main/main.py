@@ -780,45 +780,101 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
         else document.getElementById('routeStatus').innerHTML = `Точек: ${{routePoints.length}}. Shift+Click для расчета.`;
     }}
 
+    const OSRM_BASE_URL = "https://router.project-osrm.org";
+
+    function haversineKm(a, b) {{
+        const toRad = (d) => d * Math.PI / 180;
+        const dLat = toRad(b[1] - a[1]);
+        const dLon = toRad(b[0] - a[0]);
+        const lat1 = toRad(a[1]);
+        const lat2 = toRad(b[1]);
+        const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+        return 6371 * 2 * Math.asin(Math.sqrt(h));
+    }}
+
+    async function snapPointToRoad(coord) {{
+        const url = `${{OSRM_BASE_URL}}/nearest/v1/driving/${{coord[0]}},${{coord[1]}}?number=1`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('nearest failed');
+        const json = await resp.json();
+        const waypoint = json.waypoints && json.waypoints[0];
+        if (!waypoint || !waypoint.location) throw new Error('nearest empty');
+        const snapped = waypoint.location;
+        return {{
+            original: coord,
+            snapped,
+            driftKm: haversineKm(coord, snapped)
+        }};
+    }}
+
+    async function routeSegment(from, to) {{
+        const url = `${{OSRM_BASE_URL}}/route/v1/driving/${{from[0]}},${{from[1]}};${{to[0]}},${{to[1]}}?overview=full&geometries=geojson&steps=true&continue_straight=true`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('route failed');
+        const json = await resp.json();
+        if (!json.routes || !json.routes.length) throw new Error('route empty');
+        return json.routes[0];
+    }}
+
     async function buildRouteManually() {{
         if (!activeStation || routePoints.length === 0) return;
-        
-        const start = [activeStation.lon, activeStation.lat];
-        const coords = [start, ...routePoints];
-        const coordStr = coords.map(c => `${{c[0]}},${{c[1]}}`).join(';');
-        
-        document.getElementById('routeStatus').innerHTML = "Расчет OSRM...";
-        
+
+        const rawPoints = [[activeStation.lon, activeStation.lat], ...routePoints];
+        document.getElementById('routeStatus').innerHTML = "Расчет маршрута и привязка к дороге...";
+
         try {{
-            const resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${{coordStr}}?overview=full&geometries=geojson`);
-            const json = await resp.json();
-            
-            if (json.routes && json.routes.length) {{
-                const r = json.routes[0];
-                const km = r.distance / 1000;
-                const tariff = parseFloat(document.getElementById('tariff').value);
-                const tons = parseFloat(document.getElementById('tonnage').value);
-                const cost = Math.round(km * tariff);
-                const costPerTon = Math.round(cost / tons);
-                
-                const format = new ol.format.GeoJSON();
-                const feature = format.readFeature(r.geometry, {{
-                    dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
-                }});
-                feature.setStyle(new ol.style.Style({{ stroke: new ol.style.Stroke({{ color: '#2563eb', width: 4 }}) }}));
-                routeSource.getFeatures().forEach(f => {{
-                    if (f.getGeometry() instanceof ol.geom.LineString) routeSource.removeFeature(f);
-                }});
-                routeSource.addFeature(feature);
-                
-                document.getElementById('routeStatus').innerHTML = `
-                    Дистанция: <b>${{km.toFixed(1)}} км</b><br>
-                    Рейс: <b>${{cost.toLocaleString()}} ₽</b><br>
-                    На тонну: <b style="color:green">+${{costPerTon}} ₽</b>
-                `;
+            const snappedPoints = [];
+            let maxDrift = 0;
+            for (const p of rawPoints) {{
+                try {{
+                    const snappedInfo = await snapPointToRoad(p);
+                    snappedPoints.push(snappedInfo.snapped);
+                    if (snappedInfo.driftKm > maxDrift) maxDrift = snappedInfo.driftKm;
+                }} catch(_) {{
+                    snappedPoints.push(p);
+                }}
             }}
+
+            let totalDistance = 0;
+            let mergedCoords = [];
+            for (let i = 0; i < snappedPoints.length - 1; i++) {{
+                const seg = await routeSegment(snappedPoints[i], snappedPoints[i + 1]);
+                totalDistance += seg.distance;
+                const coords = seg.geometry.coordinates || [];
+                if (!coords.length) continue;
+                if (!mergedCoords.length) mergedCoords = coords;
+                else mergedCoords = mergedCoords.concat(coords.slice(1));
+            }}
+
+            if (!mergedCoords.length) throw new Error('empty merged geometry');
+
+            const geometry = {{ type: 'LineString', coordinates: mergedCoords }};
+            const format = new ol.format.GeoJSON();
+            const feature = format.readFeature(geometry, {{
+                dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+            }});
+            feature.setStyle(new ol.style.Style({{ stroke: new ol.style.Stroke({{ color: '#2563eb', width: 4 }}) }}));
+
+            routeSource.getFeatures().forEach(f => {{
+                if (f.getGeometry() instanceof ol.geom.LineString) routeSource.removeFeature(f);
+            }});
+            routeSource.addFeature(feature);
+
+            const km = totalDistance / 1000;
+            const tariff = parseFloat(document.getElementById('tariff').value);
+            const tons = parseFloat(document.getElementById('tonnage').value);
+            const cost = Math.round(km * tariff);
+            const costPerTon = Math.round(cost / tons);
+            const snapWarn = maxDrift > 0.6 ? `<br><span style="color:#b45309">⚠ Точка была далеко от дороги, привязка до ${{maxDrift.toFixed(1)}} км</span>` : '';
+
+            document.getElementById('routeStatus').innerHTML = `
+                Дистанция: <b>${{km.toFixed(1)}} км</b><br>
+                Рейс: <b>${{cost.toLocaleString()}} ₽</b><br>
+                На тонну: <b style="color:green">+${{costPerTon}} ₽</b>
+                ${{snapWarn}}
+            `;
         }} catch(e) {{
-            document.getElementById('routeStatus').innerHTML = "Ошибка OSRM";
+            document.getElementById('routeStatus').innerHTML = "Ошибка OSRM: не удалось построить маршрут";
         }}
     }}
     
