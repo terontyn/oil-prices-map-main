@@ -448,7 +448,7 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
     providers = {
         "yandex_map": {"title": "Yandex Карта", "url": "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&v=23.09.14-0&x={x}&y={y}&z={z}&scale=1&lang=ru_RU", "visible": MAP_PROVIDER=="yandex_map"},
         "yandex_sat": {"title": "Yandex Спутник", "url": "https://core-sat-renderer-tiles.maps.yandex.net/tiles?l=sat&v=3.888.0&x={x}&y={y}&z={z}&lang=ru_RU", "visible": MAP_PROVIDER=="yandex_sat"},
-        "osm": {"title": "OpenStreetMap", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "visible": MAP_PROVIDER=="openstreetmap"}
+        "osm": {"title": "OpenStreetMap", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "visible": MAP_PROVIDER in ["openstreetmap", "osm"]}
     }
     
     return f"""<!doctype html>
@@ -701,7 +701,7 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
             if (feature && feature.get('data')) {{
                 showPopup(feature.get('data'), evt.coordinate);
             }} else if (activeStation) {{
-                addRoutePoint(evt.coordinate);
+                addRoutePoint(evt.coordinate, evt.originalEvent);
             }} else {{
                 overlay.setPosition(undefined);
             }}
@@ -747,17 +747,28 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
     }}
 
     // --- LOGISTICS ---
+    function ensureRoutingCompatibleLayer() {{
+        const selector = document.getElementById('mapProvider');
+        if (!selector || selector.value === 'osm') return false;
+        selector.value = 'osm';
+        changeMapLayer();
+        return true;
+    }}
+
     function startLogistics(code) {{
         const feature = vectorSource.getFeatures().find(f => f.get('data').code === code);
         if(!feature) return;
         activeStation = feature.get('data');
         routePoints = [];
         routeSource.clear();
-        document.getElementById('routeStatus').innerHTML = `<b>${{activeStation.name}}</b><br>Кликайте по карте для точек доставки...`;
+        const switchedToOsm = ensureRoutingCompatibleLayer();
+        document.getElementById('routeStatus').innerHTML = switchedToOsm
+            ? `<b>${{activeStation.name}}</b><br>Слой переключен на OSM для точного дорожного маршрута. Кликайте по карте для точек доставки...`
+            : `<b>${{activeStation.name}}</b><br>Кликайте по карте для точек доставки...`;
         document.getElementById('popup-closer').click();
     }}
 
-    function addRoutePoint(coord) {{
+    function addRoutePoint(coord, originalEvent) {{
         const lonLat = ol.proj.toLonLat(coord);
         routePoints.push(lonLat);
         
@@ -765,49 +776,61 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
         pt.setStyle(new ol.style.Style({{ image: new ol.style.Circle({{ radius: 6, fill: new ol.style.Fill({{color:'#f59e0b'}}), stroke: new ol.style.Stroke({{color:'#fff', width:2}}) }}) }}));
         routeSource.addFeature(pt);
         
-        if (window.event && window.event.shiftKey) buildRouteManually();
+        if (originalEvent && originalEvent.shiftKey) buildRouteManually();
         else document.getElementById('routeStatus').innerHTML = `Точек: ${{routePoints.length}}. Shift+Click для расчета.`;
+    }}
+
+    const OSRM_BASE_URL = "https://router.project-osrm.org";
+
+    async function routeWithAlternatives(coords) {{
+        const coordStr = coords.map(c => `${{c[0]}},${{c[1]}}`).join(';');
+        const url = `${{OSRM_BASE_URL}}/route/v1/driving/${{coordStr}}?overview=full&geometries=geojson&steps=true&alternatives=3`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('route failed');
+        const json = await resp.json();
+        if (!json.routes || !json.routes.length) throw new Error('route empty');
+
+        // Берем самый короткий вариант среди альтернатив, а не просто первый
+        return json.routes.reduce((best, cur) => (cur.distance < best.distance ? cur : best));
     }}
 
     async function buildRouteManually() {{
         if (!activeStation || routePoints.length === 0) return;
-        
-        const start = [activeStation.lon, activeStation.lat];
-        const coords = [start, ...routePoints];
-        const coordStr = coords.map(c => `${{c[0]}},${{c[1]}}`).join(';');
-        
+
+        const coords = [[activeStation.lon, activeStation.lat], ...routePoints];
         document.getElementById('routeStatus').innerHTML = "Расчет OSRM...";
-        
+
         try {{
-            const resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${{coordStr}}?overview=full&geometries=geojson`);
-            const json = await resp.json();
-            
-            if (json.routes && json.routes.length) {{
-                const r = json.routes[0];
-                const km = r.distance / 1000;
-                const tariff = parseFloat(document.getElementById('tariff').value);
-                const tons = parseFloat(document.getElementById('tonnage').value);
-                const cost = Math.round(km * tariff);
-                const costPerTon = Math.round(cost / tons);
-                
-                const format = new ol.format.GeoJSON();
-                const feature = format.readFeature(r.geometry, {{
-                    dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
-                }});
-                feature.setStyle(new ol.style.Style({{ stroke: new ol.style.Stroke({{ color: '#2563eb', width: 4 }}) }}));
-                routeSource.addFeature(feature);
-                
-                document.getElementById('routeStatus').innerHTML = `
-                    Дистанция: <b>${{km.toFixed(1)}} км</b><br>
-                    Рейс: <b>${{cost.toLocaleString()}} ₽</b><br>
-                    На тонну: <b style="color:green">+${{costPerTon}} ₽</b>
-                `;
-            }}
+            const r = await routeWithAlternatives(coords);
+
+            const format = new ol.format.GeoJSON();
+            const feature = format.readFeature(r.geometry, {{
+                dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+            }});
+            feature.setStyle(new ol.style.Style({{ stroke: new ol.style.Stroke({{ color: '#2563eb', width: 4 }}) }}));
+
+            routeSource.getFeatures().forEach(f => {{
+                if (f.getGeometry() instanceof ol.geom.LineString) routeSource.removeFeature(f);
+            }});
+            routeSource.addFeature(feature);
+
+            const km = r.distance / 1000;
+            const tariff = parseFloat(document.getElementById('tariff').value);
+            const tons = parseFloat(document.getElementById('tonnage').value);
+            const cost = Math.round(km * tariff);
+            const costPerTon = Math.round(cost / tons);
+
+            document.getElementById('routeStatus').innerHTML = `
+                Дистанция: <b>${{km.toFixed(1)}} км</b><br>
+                Рейс: <b>${{cost.toLocaleString()}} ₽</b><br>
+                На тонну: <b style="color:green">+${{costPerTon}} ₽</b><br>
+                <span style="color:#6b7280">Маршрут выбран из альтернатив OSRM (кратчайший).</span>
+            `;
         }} catch(e) {{
-            document.getElementById('routeStatus').innerHTML = "Ошибка OSRM";
+            document.getElementById('routeStatus').innerHTML = "Ошибка OSRM: не удалось построить маршрут";
         }}
     }}
-    
+
     function clearRoute() {{
         routeSource.clear();
         routePoints = [];
@@ -941,6 +964,10 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
 # ──────────────────────────────────────────────────────────────────────────────
 # 6. MAIN
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+
+
 def main():
     print(f"🚀 Запуск AMN v1.6 [Fix: output + markers]...")
     gen_time = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
