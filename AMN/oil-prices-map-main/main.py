@@ -448,7 +448,7 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
     providers = {
         "yandex_map": {"title": "Yandex Карта", "url": "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&v=23.09.14-0&x={x}&y={y}&z={z}&scale=1&lang=ru_RU", "visible": MAP_PROVIDER=="yandex_map"},
         "yandex_sat": {"title": "Yandex Спутник", "url": "https://core-sat-renderer-tiles.maps.yandex.net/tiles?l=sat&v=3.888.0&x={x}&y={y}&z={z}&lang=ru_RU", "visible": MAP_PROVIDER=="yandex_sat"},
-        "osm": {"title": "OpenStreetMap", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "visible": MAP_PROVIDER=="openstreetmap"}
+        "osm": {"title": "OpenStreetMap", "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "visible": MAP_PROVIDER in ["openstreetmap", "osm"]}
     }
     
     return f"""<!doctype html>
@@ -747,13 +747,24 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
     }}
 
     // --- LOGISTICS ---
+    function ensureRoutingCompatibleLayer() {{
+        const selector = document.getElementById('mapProvider');
+        if (!selector || selector.value === 'osm') return false;
+        selector.value = 'osm';
+        changeMapLayer();
+        return true;
+    }}
+
     function startLogistics(code) {{
         const feature = vectorSource.getFeatures().find(f => f.get('data').code === code);
         if(!feature) return;
         activeStation = feature.get('data');
         routePoints = [];
         routeSource.clear();
-        document.getElementById('routeStatus').innerHTML = `<b>${{activeStation.name}}</b><br>Кликайте по карте для точек доставки...`;
+        const switchedToOsm = ensureRoutingCompatibleLayer();
+        document.getElementById('routeStatus').innerHTML = switchedToOsm
+            ? `<b>${{activeStation.name}}</b><br>Слой переключен на OSM для точного дорожного маршрута. Кликайте по карте для точек доставки...`
+            : `<b>${{activeStation.name}}</b><br>Кликайте по карте для точек доставки...`;
         document.getElementById('popup-closer').click();
     }}
 
