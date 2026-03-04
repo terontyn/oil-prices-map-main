@@ -220,6 +220,7 @@ def process_spimex_data(pdf_file, stations_df):
                 code = normalize_code(row[0])
                 price_best = clean_price(row[-3])
                 price_mkt = clean_price(row[-4])
+                
                 if price_best is None: continue
                 price = max(price_best, price_mkt) if price_mkt else price_best
                 
@@ -277,122 +278,95 @@ def process_lukoil_xlsx(xlsx_file, stations_df):
         df_raw = pd.read_excel(xlsx_file, header=None, engine="openpyxl")
         df_raw = df_raw.dropna(how="all").reset_index(drop=True)
         
-        # ─── HYBRID PARSER: CHECK FOR WIDE HEADER ───
-        wide_header_idx = -1
-        fuel_map = {} # col_idx -> fuel_cat
+        # ─── SMART COLUMN DETECTION ───
+        col_st_idx = -1
+        col_pr_idx = -1
+        col_fl_idx = -1
         
-        # Look for a row that contains >1 fuel keywords
-        for r in range(min(15, len(df_raw))):
-            row_vals = df_raw.iloc[r].astype(str).tolist()
-            matches = {}
-            for c_idx, val in enumerate(row_vals):
-                cat = get_fuel_category(val)
-                if cat: matches[c_idx] = cat
-            
-            if len(matches) >= 2:
-                wide_header_idx = r
-                fuel_map = matches
-                break
+        known_norms = set(stations_df["name_norm"])
         
-        if wide_header_idx >= 0:
-            print(f"  -> Detected WIDE format (Header at row {wide_header_idx})")
-            # Re-detect station col
-            col_st_idx = -1
-            known_norms = set(stations_df["name_norm"])
-            for c in df_raw.columns:
-                if c in fuel_map: continue
-                sample = df_raw[c].astype(str).head(30).tolist()
-                match_count = sum(1 for x in sample if re.sub(r'\W+', '', x.lower()) in known_norms)
-                if match_count > 0: col_st_idx = c; break
-            
-            if col_st_idx == -1: col_st_idx = 0
-            
-            # Start iterating from data rows
-            last_valid_match = None
-            for i in range(wide_header_idx + 1, len(df_raw)):
-                row = df_raw.iloc[i]
-                sname = str(row[col_st_idx]).strip()
+        # 1. Station Column
+        best_match_count = 0
+        for c in df_raw.columns:
+            sample = df_raw[c].astype(str).head(50).tolist()
+            match_count = sum(1 for x in sample if re.sub(r'\W+', '', x.lower()) in known_norms)
+            if match_count > best_match_count:
+                best_match_count = match_count
+                col_st_idx = c
                 
-                match = None
-                if len(sname) > 3 and sname.lower() != 'nan':
-                    match = match_lukoil_station(sname, stations_df)
-                    if match is not None: last_valid_match = match
+        # 2. Price Column
+        best_price_count = 0
+        for c in df_raw.columns:
+            if c == col_st_idx: continue
+            sample = df_raw[c].head(50).tolist()
+            valid_prices = 0
+            for x in sample:
+                p = clean_price(x)
+                if p and p > 10000: valid_prices += 1
+            if valid_prices > best_price_count:
+                best_price_count = valid_prices
+                col_pr_idx = c
                 
-                if match is None and last_valid_match is not None:
-                    match = last_valid_match
-                    
+        # 3. Fuel Column
+        best_fuel_count = 0
+        for c in df_raw.columns:
+            if c == col_st_idx or c == col_pr_idx: continue
+            sample = df_raw[c].astype(str).head(50).tolist()
+            valid_fuels = sum(1 for x in sample if get_fuel_category(x))
+            if valid_fuels > best_fuel_count:
+                best_fuel_count = valid_fuels
+                col_fl_idx = c
+
+        # Defaults
+        if col_st_idx == -1: col_st_idx = 0
+        if col_pr_idx == -1: col_pr_idx = len(df_raw.columns) - 1
+        if col_fl_idx == -1: col_fl_idx = 1 if len(df_raw.columns) > 1 else -1
+
+        print(f"  -> Detected: Station={col_st_idx}, Fuel={col_fl_idx}, Price={col_pr_idx}")
+
+        # ─── ROW ITERATION WITH FORWARD FILL ───
+        last_valid_match = None
+        
+        for i, row in df_raw.iterrows():
+            sname = str(row[col_st_idx]).strip()
+            
+            # --- Try to match station ---
+            match = None
+            # Only try to match if sname looks real (len > 3 and not 'nan')
+            if len(sname) > 3 and sname.lower() != 'nan':
+                match = match_lukoil_station(sname, stations_df)
                 if match is not None:
-                    # Iterate identified fuel columns
-                    for c_idx, cat in fuel_map.items():
-                        price = clean_price(row[c_idx])
-                        if price:
-                            results.append({
-                                "code": f"LUK_{match['name_norm'][:10]}", "name": match["name"], 
-                                "lat": match["lat"], "lon": match["lon"], 
-                                "fuels": [{"name": cat, "price": price, "cat": cat, "date": file_date}],
-                                "override_seg": file_seg
-                            })
-        else:
-            print("  -> Detected LONG format (No header row found)")
-            # ─── LONG FORMAT LOGIC ───
-            col_st_idx = -1
-            col_pr_idx = -1
-            col_fl_idx = -1
+                    last_valid_match = match
             
-            # Detect Columns
-            known_norms = set(stations_df["name_norm"])
-            best_match_count = 0
-            for c in df_raw.columns:
-                sample = df_raw[c].astype(str).head(50).tolist()
-                cnt = sum(1 for x in sample if re.sub(r'\W+', '', x.lower()) in known_norms)
-                if cnt > best_match_count: best_match_count = cnt; col_st_idx = c
-            
-            best_price_count = 0
-            for c in df_raw.columns:
-                if c == col_st_idx: continue
-                sample = df_raw[c].head(50).tolist()
-                cnt = sum(1 for x in sample if clean_price(x) and clean_price(x) > 10000)
-                if cnt > best_price_count: best_price_count = cnt; col_pr_idx = c
-            
-            best_fuel_count = 0
-            for c in df_raw.columns:
-                if c == col_st_idx or c == col_pr_idx: continue
-                sample = df_raw[c].astype(str).head(50).tolist()
-                cnt = sum(1 for x in sample if get_fuel_category(x))
-                if cnt > best_fuel_count: best_fuel_count = cnt; col_fl_idx = c
-            
-            if col_st_idx == -1: col_st_idx = 0
-            if col_pr_idx == -1: col_pr_idx = len(df_raw.columns) - 1
-            if col_fl_idx == -1: col_fl_idx = 1 if len(df_raw.columns) > 1 else -1
-            
-            last_valid_match = None
-            for i, row in df_raw.iterrows():
-                sname = str(row[col_st_idx]).strip()
-                match = None
-                if len(sname) > 3 and sname.lower() != 'nan':
-                    match = match_lukoil_station(sname, stations_df)
-                    if match is not None: last_valid_match = match
+            # Fallback: Use last valid station if current name is empty/invalid
+            if match is None and last_valid_match is not None:
+                # Only inherit if we have valid price/fuel in this row
+                match = last_valid_match
+
+            if match is not None:
+                # --- Get Price ---
+                price = clean_price(row[col_pr_idx])
                 
-                if match is None and last_valid_match is not None:
-                    match = last_valid_match
+                # --- Get Fuel ---
+                fname = ""
+                if col_fl_idx != -1:
+                    fname = str(row[col_fl_idx])
                 
-                if match is not None:
-                    price = clean_price(row[col_pr_idx])
-                    fname = str(row[col_fl_idx]) if col_fl_idx != -1 else ""
-                    cat = get_fuel_category(fname)
-                    
-                    if not cat: # Fallback search row
-                        for val in row:
-                            c_try = get_fuel_category(str(val))
-                            if c_try: cat = c_try; fname = str(val); break
-                            
-                    if price and cat:
-                        results.append({
-                            "code": f"LUK_{match['name_norm'][:10]}", "name": match["name"], 
-                            "lat": match["lat"], "lon": match["lon"], 
-                            "fuels": [{"name": fname, "price": price, "cat": cat, "date": file_date}],
-                            "override_seg": file_seg
-                        })
+                # If fuel col is empty/invalid, search row
+                cat = get_fuel_category(fname)
+                if not cat:
+                    for val in row:
+                        c_try = get_fuel_category(str(val))
+                        if c_try: 
+                            cat = c_try; fname = str(val); break
+                
+                if price and cat:
+                    results.append({
+                        "code": f"LUK_{match['name_norm'][:10]}", "name": match["name"], 
+                        "lat": match["lat"], "lon": match["lon"], 
+                        "fuels": [{"name": fname, "price": price, "cat": cat, "date": file_date}],
+                        "override_seg": file_seg
+                    })
 
     except Exception as e:
         print(f"❌ Ошибка {xlsx_file}: {e}")
@@ -414,14 +388,20 @@ def aggregate_markers_by_coordinates(markers, precision=4, company=""):
     for (lat, lon), items in buckets.items():
         uniq_names = sorted(list(set(x["name"] for x in items if x["name"])))
         name = " / ".join(uniq_names[:2]) + ("..." if len(uniq_names) > 2 else "")
-        fuels, seen, cats, override_segs = [], set(), set(), set()
+        
+        fuels = []
+        seen = set()
+        cats = set()
+        override_segs = set()
         
         for it in items:
             if "override_seg" in it: override_segs.add(it["override_seg"])
             for f in it.get("fuels", []):
                 k = (f["name"], f["price"])
                 if k not in seen:
-                    seen.add(k); fuels.append(f); cats.add(f["cat"])
+                    seen.add(k)
+                    fuels.append(f)
+                    cats.add(f["cat"])
         
         fuels.sort(key=lambda x: (_CAT_ORDER.index(x["cat"]) if x["cat"] in _CAT_ORDER else 999, x["price"]))
         
