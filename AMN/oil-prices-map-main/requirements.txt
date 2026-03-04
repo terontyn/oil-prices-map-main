@@ -1,0 +1,6 @@
+pandas
+pdfplumber
+curl_cffi
+openpyxl
+beautifulsoup4
+requests
