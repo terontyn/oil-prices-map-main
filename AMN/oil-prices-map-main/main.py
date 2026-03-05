@@ -782,29 +782,69 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
 
     const OSRM_BASE_URL = "https://router.project-osrm.org";
 
-    async function routeWithAlternatives(coords) {{
-        const coordStr = coords.map(c => `${{c[0]}},${{c[1]}}`).join(';');
-        const url = `${{OSRM_BASE_URL}}/route/v1/driving/${{coordStr}}?overview=full&geometries=geojson&steps=true&alternatives=3`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error('route failed');
-        const json = await resp.json();
-        if (!json.routes || !json.routes.length) throw new Error('route empty');
+    function haversineKm(a, b) {{
+        const toRad = (d) => d * Math.PI / 180;
+        const dLat = toRad(b[1] - a[1]);
+        const dLon = toRad(b[0] - a[0]);
+        const la1 = toRad(a[1]);
+        const la2 = toRad(b[1]);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+        return 6371 * (2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)));
+    }}
 
-        // Берем самый короткий вариант среди альтернатив, а не просто первый
-        return json.routes.reduce((best, cur) => (cur.distance < best.distance ? cur : best));
+    async function fetchJson(url) {{
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${{resp.status}}`);
+        return await resp.json();
+    }}
+
+    async function snapToRoad(coord) {{
+        const url = `${{OSRM_BASE_URL}}/nearest/v1/driving/${{coord[0]}},${{coord[1]}}?number=1`;
+        const json = await fetchJson(url);
+        const wp = json.waypoints && json.waypoints[0];
+        if (!wp || !wp.location) throw new Error('nearest empty');
+        return {{
+            input: coord,
+            snapped: wp.location,
+            driftKm: haversineKm(coord, wp.location)
+        }};
+    }}
+
+    async function routeLeg(from, to) {{
+        const url = `${{OSRM_BASE_URL}}/route/v1/driving/${{from[0]}},${{from[1]}};${{to[0]}},${{to[1]}}?overview=full&geometries=geojson&steps=true&continue_straight=true`;
+        const json = await fetchJson(url);
+        if (!json.routes || !json.routes.length) throw new Error('route empty');
+        return json.routes[0];
     }}
 
     async function buildRouteManually() {{
         if (!activeStation || routePoints.length === 0) return;
 
-        const coords = [[activeStation.lon, activeStation.lat], ...routePoints];
-        document.getElementById('routeStatus').innerHTML = "Расчет OSRM...";
+        const rawPoints = [[activeStation.lon, activeStation.lat], ...routePoints];
+        document.getElementById('routeStatus').innerHTML = "Расчет маршрута: привязка к дороге и сегменты...";
 
         try {{
-            const r = await routeWithAlternatives(coords);
+            const snappedMeta = [];
+            for (const p of rawPoints) snappedMeta.push(await snapToRoad(p));
+
+            const snappedPoints = snappedMeta.map(x => x.snapped);
+            const maxDrift = Math.max(...snappedMeta.map(x => x.driftKm));
+
+            let totalDistance = 0;
+            let mergedCoords = [];
+            for (let i = 0; i < snappedPoints.length - 1; i++) {{
+                const leg = await routeLeg(snappedPoints[i], snappedPoints[i + 1]);
+                totalDistance += leg.distance;
+                const coords = leg.geometry && leg.geometry.coordinates ? leg.geometry.coordinates : [];
+                if (!coords.length) continue;
+                if (!mergedCoords.length) mergedCoords = coords;
+                else mergedCoords = mergedCoords.concat(coords.slice(1));
+            }}
+
+            if (!mergedCoords.length) throw new Error('merged route empty');
 
             const format = new ol.format.GeoJSON();
-            const feature = format.readFeature(r.geometry, {{
+            const feature = format.readFeature({{ type: 'LineString', coordinates: mergedCoords }}, {{
                 dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
             }});
             feature.setStyle(new ol.style.Style({{ stroke: new ol.style.Stroke({{ color: '#2563eb', width: 4 }}) }}));
@@ -814,17 +854,20 @@ def render_openlayers_html(markers, date_str, gen_time, otp_prices):
             }});
             routeSource.addFeature(feature);
 
-            const km = r.distance / 1000;
+            const km = totalDistance / 1000;
             const tariff = parseFloat(document.getElementById('tariff').value);
             const tons = parseFloat(document.getElementById('tonnage').value);
             const cost = Math.round(km * tariff);
             const costPerTon = Math.round(cost / tons);
+            const driftMsg = maxDrift > 1
+                ? `<br><span style="color:#b45309">⚠ Одна из точек была далеко от дороги: до ${{maxDrift.toFixed(1)}} км</span>`
+                : '';
 
             document.getElementById('routeStatus').innerHTML = `
                 Дистанция: <b>${{km.toFixed(1)}} км</b><br>
                 Рейс: <b>${{cost.toLocaleString()}} ₽</b><br>
-                На тонну: <b style="color:green">+${{costPerTon}} ₽</b><br>
-                <span style="color:#6b7280">Маршрут выбран из альтернатив OSRM (кратчайший).</span>
+                На тонну: <b style="color:green">+${{costPerTon}} ₽</b>
+                ${{driftMsg}}
             `;
         }} catch(e) {{
             document.getElementById('routeStatus').innerHTML = "Ошибка OSRM: не удалось построить маршрут";
