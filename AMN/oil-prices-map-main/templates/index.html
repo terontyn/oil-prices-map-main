@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>AMN v1.6 — Мониторинг</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.2.4/ol.css"/>
+    <style>
+        body, html, #map { margin: 0; width: 100%; height: 100%; font-family: Arial, sans-serif; overflow: hidden; background: #f0f2f5; }
+        .mono-fab { position: fixed; z-index: 1001; top: 15px; left: 15px; width: 44px; height: 44px; background: #111; color: #fff; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; box-shadow: 4px 4px 10px rgba(0,0,0,0.2); font-size: 20px; }
+        .mono-panel { position: absolute; z-index: 1000; background: #fff; border: 1px solid #111; border-radius: 12px; box-shadow: 8px 8px 15px rgba(0,0,0,0.15); display: flex; flex-direction: column; max-height: calc(100vh - 30px); transition: opacity 0.3s; }
+        .mono-header { background: #111; color: #fff; padding: 10px 12px; font-size: 11px; text-transform: uppercase; border-radius: 11px 11px 0 0; display: flex; justify-content: space-between; align-items: center; cursor: move; }
+        .mono-toggle { cursor: pointer; font-size: 18px; padding: 0 5px; }
+        .mono-scroll { overflow-y: auto; padding: 12px; flex: 1; }
+        .mono-block { padding: 10px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 12px; }
+        .mono-title { font-weight: bold; font-size: 12px; margin-bottom: 6px; }
+        .mono-muted { color:#888; font-size: 11px; margin-bottom: 5px; }
+        .mono-input { width: 100%; padding: 7px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; box-sizing: border-box; outline: none; }
+        .mono-btn { background: #111; color: #fff; border: 0; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 11px; width: 100%; font-weight: bold; text-transform: uppercase; margin-top: 5px; }
+        .mono-btn--ghost { background: #fff; color: #111; border: 1px solid #111; }
+        .mono-check { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 5px; cursor: pointer; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .fuel-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
+        .fuel-table td { padding: 5px 0; border-bottom: 1px solid #f5f5f5; }
+        .otp-modal { display:none; position:fixed; z-index:2000; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; }
+        .otp-content { background:#fff; border-radius:15px; width:580px; max-height:85vh; display:flex; flex-direction:column; }
+        .ol-popup { position: absolute; background: white; box-shadow: 0 5px 25px rgba(0,0,0,0.15); padding: 15px; border-radius: 15px; bottom: 20px; left: -50px; min-width: 300px; }
+        .popup-closer { position: absolute; top: 8px; right: 12px; text-decoration: none; color: #bbb; font-size: 20px; }
+        .update-badge { position: fixed; top: 15px; right: 15px; z-index: 1000; background: #28a745; color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; border: 2px solid #fff; }
+        .station-list-item { padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
+        .station-list-item:hover { background: #f0f8ff; }
+        .station-list-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+
+<div class="update-badge" id="updateBadge">ОБНОВЛЕНО: {{ gen_time }}</div>
+<div class="mono-fab" id="restoreBtn" onclick="toggleMenu(true)">☰</div>
+
+<div class="mono-panel" id="uiPanel" style="top: 15px; left: 15px; width: 310px;">
+    <div class="mono-header" id="uiHeader">
+        <span>МЕНЮ AMN v1.6 (Перетащи)</span>
+        <span class="mono-toggle" onclick="toggleMenu(false)">×</span>
+    </div>
+    <div class="mono-scroll">
+        <div class="mono-muted">Данные: {{ date_str }}</div>
+
+        <div class="mono-block">
+            <div class="mono-title">Фильтры карты</div>
+            <label class="mono-check"><input type="checkbox" id="flt_spimex" checked onchange="applyFilters()"> <span class="dot" style="background:#808080;"></span> СПб биржа (Серый)</label>
+            <label class="mono-check"><input type="checkbox" id="flt_luk_spot" checked onchange="applyFilters()"> <span class="dot" style="background:#e11d48;"></span> Лукойл Спот (Красный)</label>
+            <label class="mono-check"><input type="checkbox" id="flt_luk_term" checked onchange="applyFilters()"> <span class="dot" style="background:#8B4513;"></span> Лукойл Терм (Коричневый)</label>
+            <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <label class="mono-check"><input type="checkbox" id="flt_benz" checked onchange="applyFilters()"> <span class="dot" style="background:#ff4d4d;"></span> Бензин</label>
+                <label class="mono-check"><input type="checkbox" id="flt_dtl" checked onchange="applyFilters()"> <span class="dot" style="background:#3399ff;"></span> ДтЛ</label>
+                <label class="mono-check"><input type="checkbox" id="flt_dte" checked onchange="applyFilters()"> <span class="dot" style="background:#ff9933;"></span> ДтЕ</label>
+                <label class="mono-check"><input type="checkbox" id="flt_dtz" checked onchange="applyFilters()"> <span class="dot" style="background:#33ccff;"></span> ДтЗ</label>
+                <label class="mono-check"><input type="checkbox" id="flt_dta" checked onchange="applyFilters()"> <span class="dot" style="background:#00cc99;"></span> ДтА</label>
+                <label class="mono-check"><input type="checkbox" id="flt_sug" checked onchange="applyFilters()"> <span class="dot" style="background:#9966ff;"></span> СУГ</label>
+            </div>
+        </div>
+
+        <div class="mono-block">
+            <div class="mono-title">Список баз</div>
+            <input type="text" id="listSearch" class="mono-input" placeholder="🔍 Поиск базы по названию..." onkeyup="renderStationList()" style="margin-bottom:8px;">
+            <select id="listSort" class="mono-input" style="margin-bottom:8px;" onchange="renderStationList()">
+                <option value="price_asc">Сортировка: Сначала дешевые</option>
+                <option value="price_desc">Сортировка: Сначала дорогие</option>
+                <option value="name">Сортировка: По алфавиту</option>
+            </select>
+            <div id="stationList" style="max-height: 220px; overflow-y: auto; font-size: 11px; border: 1px solid #eee; border-radius: 8px; background: #fafafa;"></div>
+        </div>
+
+        <div class="mono-block">
+            <div class="mono-title">Логистика (Ручной маршрут)</div>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <div style="flex:1;"><span style="font-size:10px; color:#999;">Тариф ₽/км</span><input id="tariff" class="mono-input" type="number" value="{{ TARIFF_PER_KM }}"/></div>
+                <div style="flex:1;"><span style="font-size:10px; color:#999;">Тонн</span><input id="tonnage" class="mono-input" type="number" value="{{ TRUCK_TONS }}"/></div>
+            </div>
+            <div id="routeStatus" class="mono-muted" style="background:#f9f9f9; padding:8px; border-radius:8px;">Откройте базу на карте и нажмите "Маршрут отсюда"</div>
+            <div style="display:flex; gap:5px; margin-top:8px;">
+                <button class="mono-btn mono-btn--ghost" onclick="clearRoute()">Сброс</button>
+                <button class="mono-btn" onclick="buildRouteManually()">Построить</button>
+            </div>
+        </div>
+
+        <div class="mono-block">
+            <div class="mono-title">Авто-поиск (Лучшая цена)</div>
+            <div class="mono-muted" style="margin-bottom:10px;"><b>Alt + Клик</b> на карте найдет Топ-3 баз с учетом доставки.</div>
+            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                <input id="finderRadius" class="mono-input" type="number" value="300" style="width:70px;" title="Радиус (км)" />
+                <select id="finderFuel" class="mono-input">
+                    <optgroup label="Бензин">
+                        <option value="Бензин">Бензин (любой)</option>
+                        <option value="Аи-95">АИ-95 / Премиум</option>
+                        <option value="Аи-92">АИ-92 / Регуляр</option>
+                    </optgroup>
+                    <optgroup label="Дизель Летний (ДтЛ)">
+                        <option value="ДтЛсортС">ДтЛ сорт C (−5)</option>
+                        <option value="ДтЛ">ДтЛ (любой)</option>
+                    </optgroup>
+                    <optgroup label="Дизель Межсезон (ДтЕ)">
+                        <option value="ДтЕсортE">ДтЕ сорт E (−15)</option>
+                        <option value="ДтЕсортF">ДтЕ сорт F (−20)</option>
+                    </optgroup>
+                    <optgroup label="Дизель Зимний (ДтЗ)">
+                        <option value="ДтЗм32">ДтЗ −32 (класс 2)</option>
+                        <option value="ДтЗм38">ДтЗ −38 (класс 3)</option>
+                    </optgroup>
+                    <optgroup label="Дизель Арктика (ДтА)">
+                        <option value="ДтАм44">ДтА −44 (вид 4)</option>
+                        <option value="ДтАм52">ДтА −52 (вид 4)</option>
+                    </optgroup>
+                    <option value="СУГ">СУГ</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="mono-block">
+            <div class="mono-title">Настройки</div>
+            <select id="mapProvider" onchange="changeMapLayer()" class="mono-input" style="margin-bottom:8px;">
+                <option value="osm">Карта (Схема)</option>
+                <option value="satellite">Спутник (ArcGIS)</option>
+            </select>
+            <button class="mono-btn mono-btn--ghost" onclick="document.getElementById('otpModal').style.display='flex'">⚙ Надбавки ОТП</button>
+        </div>
+    </div>
+</div>
+
+<div class="mono-panel" id="routesPanel" style="display:none; top: 15px; left: 340px; width: 320px; z-index: 1005;">
+    <div class="mono-header" id="routesHeader" style="background: #2563eb;">
+        <span>🏆 ТОП-3 ЛУЧШИХ ВАРИАНТОВ</span>
+        <span class="mono-toggle" onclick="document.getElementById('routesPanel').style.display='none'; routeSource.clear();">×</span>
+    </div>
+    <div class="mono-scroll" id="routesContent" style="background: #f8fafc; padding: 12px;">
+        </div>
+</div>
+
+<div id="otpModal" class="otp-modal">
+    <div class="otp-content">
+        <div style="background:#111; color:#fff; padding:15px; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
+            <span>⚙ НАСТРОЙКА НАДБАВОК ОТП</span>
+            <span style="cursor:pointer; font-size:24px;" onclick="document.getElementById('otpModal').style.display='none'">×</span>
+        </div>
+        <div style="overflow-y:auto; flex:1; padding:20px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <thead>
+                    <tr style="border-bottom:2px solid #111; color:#666;">
+                        <th style="text-align:left; padding:8px;">Нефтебаза</th>
+                        <th style="width:90px;">Налив</th>
+                        <th style="width:110px;">Хранение</th>
+                        <th style="width:80px;">Сумма</th>
+                    </tr>
+                </thead>
+                <tbody id="otpTableBody"></tbody>
+            </table>
+        </div>
+        <div style="padding:15px; display:flex; gap:10px; background:#f9f9f9;">
+            <button class="mono-btn" onclick="saveOtp()">Применить</button>
+            <button class="mono-btn mono-btn--ghost" onclick="document.getElementById('otpModal').style.display='none'">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<div id="map"></div>
+<div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="popup-closer" onclick="overlay.setPosition(undefined); return false;">×</a>
+    <div id="popup-content"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js"></script>
+<script>
+    window.AMN_DATA = {
+        markers: {{ markers_json | safe }},
+        otpPrices: {{ otp_json | safe }},
+        providers: {{ providers_json | safe }},
+        config: {
+            center_lat: {{ MAP_CENTER_LAT }},
+            center_lon: {{ MAP_CENTER_LON }},
+            zoom_start: {{ MAP_ZOOM_START }},
+            tariff: {{ TARIFF_PER_KM }},
+            tonnage: {{ TRUCK_TONS }}
+        }
+    };
+</script>
+<script src="js/map.js"></script>
+</body>
+</html>
