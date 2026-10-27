@@ -1,0 +1,62 @@
+[
+  {
+    "code": "DEMO_1",
+    "name": "Демо нефтебаза Север",
+    "lat": 56.9,
+    "lon": 60.6,
+    "fuels": [
+      {
+        "name": "ДТ ЕВРО",
+        "cat": "ДтЕ",
+        "price": 60000,
+        "date": "DEMO"
+      }
+    ],
+    "company": "spimex"
+  },
+  {
+    "code": "DEMO_2",
+    "name": "Демо нефтебаза Восток",
+    "lat": 56.75,
+    "lon": 61.1,
+    "fuels": [
+      {
+        "name": "АИ-95",
+        "cat": "Бензин",
+        "price": 62000,
+        "date": "DEMO"
+      }
+    ],
+    "company": "lukoil_spot"
+  },
+  {
+    "code": "DEMO_3",
+    "name": "Демо нефтебаза Запад",
+    "lat": 56.8,
+    "lon": 60.0,
+    "fuels": [
+      {
+        "name": "ДТ зимнее",
+        "cat": "ДтЗ",
+        "price": 64000,
+        "date": "DEMO"
+      }
+    ],
+    "company": "rosneft"
+  },
+  {
+    "code": "DEMO_4",
+    "name": "Демо нефтебаза Центр",
+    "lat": 56.83,
+    "lon": 60.55,
+    "fuels": [
+      {
+        "name": "АИ-92",
+        "cat": "Бензин",
+        "price": 57000,
+        "date": "DEMO"
+      }
+    ],
+    "company": "other"
+  }
+]
