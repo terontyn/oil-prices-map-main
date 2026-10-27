@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_4321abeb900f474c6c290cd04e7675a1 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    
+<div id="updateBadge" style="position: fixed; top: 15px; left: 50%; transform: translateX(-50%); z-index: 10000; background: #28a745; color: white; padding: 10px 20px; border-radius: 30px; font-family: monospace; font-size: 14px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: opacity 1s ease-out; pointer-events: none; border: 2px solid #fff;">
+    ✅ КОД ОБНОВЛЕН: 26.02.2026 09:15:59
+</div>
+
+<style>
+  .leaflet-container { font-family: Arial, sans-serif !important; }
+  .mono-fab { position: fixed; z-index: 9999; top: 18px; left: 18px; width: 44px; height: 44px; background: #111; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 4px 4px 0 rgba(0,0,0,0.1); font-size: 20px; font-weight: bold; border: 2px solid #fff; display: none; user-select: none; }
+  .mono-panel { position: fixed; z-index: 9998; top: 18px; left: 18px; width: 290px; background: #fff; border: 1px solid #111; box-shadow: 8px 8px 0 rgba(0,0,0,0.06); border-radius: 12px; overflow: hidden; user-select: none; }
+  .mono-header { background: #111; color: #fff; padding: 10px 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; cursor: move; }
+  .mono-header-controls { display: flex; gap: 6px; }
+  .mono-toggle { cursor: pointer; font-weight: 700; padding: 2px 8px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; transition: 0.2s; }
+  .mono-toggle:hover { background: rgba(255,255,255,0.2); }
+  .mono-content { display: none; padding: 12px; font-size: 12px; border-top: 1px solid #111; }
+  .mono-muted { color:#666; font-size: 11px; line-height: 1.25; }
+  .mono-block { padding: 10px; border: 1px solid #eee; border-radius: 12px; margin-top: 10px; }
+  .mono-row { display:flex; gap:8px; } .mono-row > * { flex:1; }
+  .mono-input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 12px; outline: none; font-size: 12px; }
+  .mono-btn { background: #111; color: #fff; border: 0; padding: 8px 10px; border-radius: 12px; cursor: pointer; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+  .mono-btn--ghost { background: #fff !important; color:#111 !important; border:1px solid #111 !important; }
+  .mono-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 8px; }
+  .mono-check { display:flex; align-items:center; gap: 6px; font-size: 12px; color:#111; }
+  .result-box { margin-top: 10px; padding: 10px; background: #f6f8ff; border: 1px dashed #cfd6ff; border-radius: 12px; font-size: 11px; }
+</style>
+
+<div class="mono-fab" id="restoreBtn" onclick="restorePanel()">☰</div>
+<div class="mono-panel" id="uiPanel">
+  <div class="mono-header" id="uiHeader">
+    <span>Меню</span>
+    <div class="mono-header-controls">
+      <span class="mono-toggle" id="uiToggle" onclick="togglePanel()">+</span>
+      <span class="mono-toggle" onclick="minimizePanel()">×</span>
+    </div>
+  </div>
+  <div class="mono-content" id="uiContent">
+    <div class="mono-muted">Данные от: неизвестно</div>
+    <div class="mono-block">
+      <div style="font-weight:700; font-size:12px; margin-bottom:6px;">Поиск нефтебаз</div>
+      <div class="mono-row"><input id="searchInput" class="mono-input" placeholder="Название..." /><button class="mono-btn" onclick="searchStation()">Найти</button></div>
+    </div>
+    <div class="mono-block">
+      <div style="font-weight:700; font-size:12px; margin-bottom:6px;">Фильтры</div>
+      <div class="mono-checks">
+        <label class="mono-check"><input type="checkbox" id="flt_spimex" checked onchange="applyFilters()"> СПб биржа</label>
+        <label class="mono-check"><input type="checkbox" id="flt_lukoil" checked onchange="applyFilters()"> Лукойл</label>
+      </div>
+      <div class="mono-checks" style="margin-top:10px;">
+        <label class="mono-check"><input type="checkbox" id="flt_Benz" checked onchange="applyFilters()"> Бензин</label>
+        <label class="mono-check"><input type="checkbox" id="flt_DtL" checked onchange="applyFilters()"> ДтЛ</label>
+        <label class="mono-check"><input type="checkbox" id="flt_DtE" checked onchange="applyFilters()"> ДтЕ (Меж)</label>
+        <label class="mono-check"><input type="checkbox" id="flt_DtZ" checked onchange="applyFilters()"> ДтЗ</label>
+        <label class="mono-check"><input type="checkbox" id="flt_DtA" checked onchange="applyFilters()"> ДтА</label>
+        <label class="mono-check"><input type="checkbox" id="flt_SUG" checked onchange="applyFilters()"> СУГ</label>
+      </div>
+    </div>
+    <div class="mono-block">
+      <div style="font-weight:700; font-size:12px; margin-bottom:6px;">Логистика (OSRM)</div>
+      <div class="mono-row" style="margin-top:8px;">
+        <button class="mono-btn mono-btn--ghost" onclick="clearLogistics()">Сбросить</button>
+        <button class="mono-btn" onclick="clearRouteOnly()">Убрать маршрут</button>
+      </div>
+      <div id="calcStatus" class="result-box" style="margin-top:8px;">Выберите станцию для расчёта</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  setTimeout(() => {
+     const badge = document.getElementById('updateBadge');
+     if(badge) badge.style.opacity = '0';
+  }, 8000);
+
+  let mapInst = null;
+  let activeDelivery = { code: null, lat: null, lon: null, name: null };
+  let routingControl = null;
+  window.__LAST_ROUTE_RESULT__ = null; 
+
+  function findMap() { for (let k in window) { if (k.startsWith('map_') && window[k] instanceof L.Map) { mapInst = window[k]; return true; } } return false; }
+  function togglePanel() { const c = document.getElementById('uiContent'); const t = document.getElementById('uiToggle'); const isOpen = c.style.display === 'block'; c.style.display = isOpen ? 'none' : 'block'; t.textContent = isOpen ? '+' : '–'; }
+  function minimizePanel() { document.getElementById('uiPanel').style.display = 'none'; document.getElementById('restoreBtn').style.display = 'flex'; }
+  function restorePanel() { document.getElementById('restoreBtn').style.display = 'none'; document.getElementById('uiPanel').style.display = 'block'; document.getElementById('uiContent').style.display = 'block'; document.getElementById('uiToggle').textContent = '–'; }
+
+  (function initDrag() {
+    const panel = document.getElementById('uiPanel'); const header = document.getElementById('uiHeader');
+    let dragging = false, startX=0, startY=0, startLeft=0, startTop=0;
+    header.addEventListener('mousedown', (e) => { dragging = true; const r = panel.getBoundingClientRect(); startX = e.clientX; startY = e.clientY; startLeft = r.left; startTop = r.top; panel.style.left = startLeft + 'px'; panel.style.top = startTop + 'px'; panel.style.right = 'auto'; panel.style.bottom = 'auto'; e.preventDefault(); });
+    window.addEventListener('mousemove', (e) => { if (!dragging) return; panel.style.left = (startLeft + (e.clientX - startX)) + 'px'; panel.style.top  = (startTop + (e.clientY - startY)) + 'px'; });
+    window.addEventListener('mouseup', () => dragging = false);
+  })();
+
+  function searchStation() {
+    const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+    if (!q) return;
+    const best = (window.__STATIONS__ || []).find(m => (m._stationCode||'').toLowerCase().includes(q) || (m._stationName||'').toLowerCase().includes(q));
+    if (!best) return document.getElementById('calcStatus').innerHTML = 'Ничего не найдено';
+    if (mapInst && !mapInst.hasLayer(best)) best.addTo(mapInst);
+    mapInst.setView(best.getLatLng(), Math.max(mapInst.getZoom(), 10)); best.openPopup();
+  }
+
+  function applyFilters() {
+    if (!mapInst) return;
+    const comp = { spimex: document.getElementById('flt_spimex').checked, lukoil: document.getElementById('flt_lukoil').checked };
+    const fuel = { 'Бензин': document.getElementById('flt_Benz').checked, 'ДтЛ': document.getElementById('flt_DtL').checked, 'ДтЕ': document.getElementById('flt_DtE').checked, 'ДтЗ': document.getElementById('flt_DtZ').checked, 'ДтА': document.getElementById('flt_DtA').checked, 'СУГ': document.getElementById('flt_SUG').checked };
+    for (const mk of (window.__STATIONS__ || [])) {
+      const c = (mk._company || '').toLowerCase();
+      let ok = (c && comp[c] !== false);
+      if (ok) {
+        const cats = mk._categories || [];
+        if (cats.length > 0) { ok = false; for (const cat of cats) { if (fuel[cat] === true) { ok = true; break; } } }
+      }
+      if (ok) { if (!mapInst.hasLayer(mk)) mk.addTo(mapInst); } else { if (mapInst.hasLayer(mk)) mapInst.removeLayer(mk); }
+    }
+  }
+
+  function clearRouteOnly() { if (!mapInst) return; if (routingControl) { mapInst.removeControl(routingControl); routingControl = null; } document.getElementById('calcStatus').innerHTML = 'Маршрут удалён.'; window.__LAST_ROUTE_RESULT__ = null; }
+  function clearLogistics() { clearRouteOnly(); activeDelivery = { code: null, lat: null, lon: null, name: null }; mapInst.getContainer().style.cursor = ''; document.getElementById('calcStatus').innerHTML = 'Логистика сброшена.'; }
+
+  function startDelivery(code, lat, lon, name) {
+    setTimeout(() => {
+      activeDelivery = { code, lat, lon, name }; mapInst.getContainer().style.cursor = 'crosshair';
+      document.getElementById('calcStatus').innerHTML = '<b>Отправитель:</b><br>' + name + '<br><br><span style="color:#b00020; font-weight:bold;">Кликните точку назначения...</span>';
+      if (routingControl) { mapInst.removeControl(routingControl); routingControl = null; }
+      if (document.getElementById('uiContent').style.display === 'none') togglePanel();
+    }, 50);
+  }
+
+  function buildRoute(start, end) {
+    if (!window.L || !L.Routing) return;
+    routingControl = L.Routing.control({
+      waypoints: [ L.latLng(start[0], start[1]), L.latLng(end[0], end[1]) ], routeWhileDragging: false, addWaypoints: false, draggableWaypoints: false, show: false, fitSelectedRoutes: true,
+      lineOptions: { styles: [{ color: '#007bff', weight: 4, opacity: 0.8, dashArray: '8, 8' }] }, router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' })
+    }).addTo(mapInst);
+
+    routingControl.on('routesfound', function(e) {
+      const km = (e.routes[0].summary.totalDistance || 0) / 1000.0;
+      const resHtml = `<div class="result-box"><b>Маршрут:</b> ${km.toFixed(1)} км<br><b>Рейс:</b> ${Math.round(km * 170.0).toLocaleString()} ₽<br><b>На 1 тонну:</b> ${Math.round(km * 7.0).toLocaleString()} ₽</div>`;
+      window.__LAST_ROUTE_RESULT__ = { code: activeDelivery.code, html: resHtml };
+      document.getElementById('calcStatus').innerHTML = '<b>Результат:</b>' + resHtml;
+      const popDiv = document.getElementById('delivery-' + activeDelivery.code); if (popDiv) popDiv.innerHTML = resHtml;
+      mapInst.getContainer().style.cursor = ''; activeDelivery.code = null;
+    });
+  }
+
+  setTimeout(() => {
+    if (findMap()) {
+      mapInst.on('click', function(e) { if (activeDelivery.code) buildRoute([activeDelivery.lat, activeDelivery.lon], [e.latlng.lat, e.latlng.lng]); });
+      mapInst.on('popupopen', function(e) { if (window.__LAST_ROUTE_RESULT__) { const popDiv = document.getElementById('delivery-' + window.__LAST_ROUTE_RESULT__.code); if (popDiv) popDiv.innerHTML = window.__LAST_ROUTE_RESULT__.html; } });
+      setTimeout(applyFilters, 800); document.getElementById('uiContent').style.display = 'block'; document.getElementById('uiToggle').textContent = '–';
+    }
+  }, 1500);
+</script>
+    
+            <div class="folium-map" id="map_4321abeb900f474c6c290cd04e7675a1" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_4321abeb900f474c6c290cd04e7675a1 = L.map(
+                "map_4321abeb900f474c6c290cd04e7675a1",
+                {
+                    center: [55.75, 37.62],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 5,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_b300155e6d38ea1283b57308cf455326 = L.tileLayer(
+                "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 20,
+  "maxNativeZoom": 20,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors \u0026copy; \u003ca href=\"https://carto.com/attributions\"\u003eCARTO\u003c/a\u003e",
+  "subdomains": "abcd",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_b300155e6d38ea1283b57308cf455326.addTo(map_4321abeb900f474c6c290cd04e7675a1);
+        
+    
+            var tile_layer_be112e0a6a9751306344d06fe7511725 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_be112e0a6a9751306344d06fe7511725.addTo(map_4321abeb900f474c6c290cd04e7675a1);
+        
+    
+            var tile_layer_b852ace6aafbce133582d00c08cb4996 = L.tileLayer(
+                "https://{s}.tile.maps.yandex.net/tiles?l=map\u0026v=3.0\u0026x={x}\u0026y={y}\u0026z={z}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Yandex",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_b852ace6aafbce133582d00c08cb4996.addTo(map_4321abeb900f474c6c290cd04e7675a1);
+        
+    
+            var feature_group_04f8f45c42bb4ed2008d54656ecdead3 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            feature_group_04f8f45c42bb4ed2008d54656ecdead3.addTo(map_4321abeb900f474c6c290cd04e7675a1);
+        
+    
+            var feature_group_41fac1e18e464ce1e9e041b3c6554b0b = L.featureGroup(
+                {
+}
+            );
+        
+    
+            feature_group_41fac1e18e464ce1e9e041b3c6554b0b.addTo(map_4321abeb900f474c6c290cd04e7675a1);
+        
+    
+            var layer_control_862bbe6a6b945405fd038e2ba3be1271_layers = {
+                base_layers : {
+                    "cartodbpositron" : tile_layer_b300155e6d38ea1283b57308cf455326,
+                    "openstreetmap" : tile_layer_be112e0a6a9751306344d06fe7511725,
+                    "Yandex" : tile_layer_b852ace6aafbce133582d00c08cb4996,
+                },
+                overlays :  {
+                    "\u0411\u0438\u0440\u0436\u0430" : feature_group_04f8f45c42bb4ed2008d54656ecdead3,
+                    "\u041b\u0443\u043a\u043e\u0439\u043b" : feature_group_41fac1e18e464ce1e9e041b3c6554b0b,
+                },
+            };
+            let layer_control_862bbe6a6b945405fd038e2ba3be1271 = L.control.layers(
+                layer_control_862bbe6a6b945405fd038e2ba3be1271_layers.base_layers,
+                layer_control_862bbe6a6b945405fd038e2ba3be1271_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": true,
+  "autoZIndex": true,
+}
+            ).addTo(map_4321abeb900f474c6c290cd04e7675a1);
+
+        
+</script>
+</html>

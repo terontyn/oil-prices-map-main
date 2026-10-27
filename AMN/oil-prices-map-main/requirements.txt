@@ -1,0 +1,12 @@
+pandas
+pdfplumber
+curl_cffi
+openpyxl
+beautifulsoup4
+requests
+jinja2
+lxml
+pytz
+schedule
+pytz
+schedule
